@@ -127,7 +127,6 @@ public class MediaqueryModule extends KrollModule
 			int bucketIdColumn = cur.getColumnIndex(MediaStore.Images.Media.BUCKET_ID);
 			int bucketColumn = cur.getColumnIndex(MediaStore.Images.Media.BUCKET_DISPLAY_NAME);
 			int dateColumn = cur.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN);
-			int thumbMagicColumn = cur.getColumnIndex(MediaStore.Images.Media.MINI_THUMB_MAGIC);
 			
 			int order = 0;
 			do {
@@ -160,6 +159,11 @@ public class MediaqueryModule extends KrollModule
 					obj.put("thumbnail", thumbnailInfo[0]);
 					obj.put("thumbnail_width", thumbnailInfo[1]);
 					obj.put("thumbnail_height", thumbnailInfo[2]);
+				}
+				else {
+					obj.put("thumbnail", null);
+					obj.put("thumbnail_width", 0);
+					obj.put("thumbnail_height", 0);
 				}
 				
 				result.put(String.valueOf(order), new KrollDict(obj)); //add the item
@@ -197,6 +201,7 @@ public class MediaqueryModule extends KrollModule
 			MediaStore.Images.Media.DATE_ADDED,
 			MediaStore.Images.Media.BUCKET_ID,
 			MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
+			MediaStore.Images.Media.MINI_THUMB_MAGIC,
 		};  
 		
 		Log.d(TAG, orderBy);
@@ -234,6 +239,7 @@ public class MediaqueryModule extends KrollModule
 			MediaStore.Images.Media.DATE_ADDED,
 			MediaStore.Images.Media.BUCKET_ID,
 			MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
+			MediaStore.Images.Media.MINI_THUMB_MAGIC,
 		};  
 		
 		Log.d(TAG, orderBy);
@@ -276,6 +282,7 @@ public class MediaqueryModule extends KrollModule
 			MediaStore.Images.Media.DATE_ADDED,
 			MediaStore.Images.Media.BUCKET_ID,
 			MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
+			MediaStore.Images.Media.MINI_THUMB_MAGIC,
 		};
 		
 		Activity activity = this.getActivity();
@@ -376,7 +383,7 @@ public class MediaqueryModule extends KrollModule
 	}
 	
 	public Object[] getThumbnail(Activity activity, String id) {
-		
+	
 		String[] projection2 = {
 			MediaStore.Images.Thumbnails.DATA,
 			MediaStore.Images.Thumbnails.IMAGE_ID,
@@ -384,7 +391,7 @@ public class MediaqueryModule extends KrollModule
 			MediaStore.Images.Thumbnails.WIDTH,
 			MediaStore.Images.Thumbnails.KIND,
 		};
-		
+	
 		Cursor cursor = MediaStore.Images.Thumbnails.queryMiniThumbnail(
 			activity.getContentResolver(),
 			Long.parseLong(id),
@@ -392,23 +399,28 @@ public class MediaqueryModule extends KrollModule
 			projection2
 		);
 		cursor.moveToFirst();
-		
+	
 		if (cursor.getCount() > 0) {
 			Object[] thumbnailInfo = {
 				cursor.getString(cursor.getColumnIndex(MediaStore.Images.Thumbnails.DATA)),
 				cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Thumbnails.WIDTH)),
 				cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Thumbnails.HEIGHT))
 			};
-			
+		
 			return thumbnailInfo;
 		}
 		else {
-			Bitmap thumbnail = MediaStore.Images.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(id), 1, null);
+			try {
+				Bitmap thumbnail = MediaStore.Images.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(id), 1, null);
+				thumbnail.recycle();
+				thumbnail = null;
+		
+				return getThumbnail(activity, id);
+			}
+			catch (Exception e) {
+				return null;
+			}
 			
-			thumbnail.recycle();
-			thumbnail = null;
-			
-			return getThumbnail(activity, id);
 		}
 	}
 	
@@ -483,15 +495,26 @@ public class MediaqueryModule extends KrollModule
 				obj.put("title", c.getFloat(c.getColumnIndex(MediaStore.Video.VideoColumns.TITLE)));
 				obj.put("artist", c.getFloat(c.getColumnIndex(MediaStore.Video.VideoColumns.ARTIST)));
 				obj.put("duration", c.getFloat(c.getColumnIndex(MediaStore.Video.VideoColumns.DURATION)));
-				obj.put("resolution", c.getFloat(c.getColumnIndex(MediaStore.Video.VideoColumns.RESOLUTION)));
+				obj.put("resolution", c.getString(c.getColumnIndex(MediaStore.Video.VideoColumns.RESOLUTION)));
 				
-				// create thumbnail
-				Bitmap thumb = MediaStore.Video.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(_id), MediaStore.Video.Thumbnails.MICRO_KIND, null);
-				TiBlob blob = TiBlob.blobFromImage(thumb);
+				try {
+					// create thumbnail
+					Bitmap thumb = MediaStore.Video.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(_id), MediaStore.Video.Thumbnails.MICRO_KIND, null);
+					TiBlob blob = TiBlob.blobFromImage(thumb);
 				
-				obj.put("thumbnail", blob);
-				obj.put("thumbnail_width", 96);
-				obj.put("thumbnail_height", 96);
+					thumb.recycle();
+					thumb = null;
+				
+					obj.put("thumbnail", blob);
+					obj.put("thumbnail_width", 96);
+					obj.put("thumbnail_height", 96);
+				}
+				catch (Exception e) {
+					obj.put("thumbnail", null);
+					obj.put("thumbnail_width", 0);
+					obj.put("thumbnail_height", 0);
+				}
+				
 				
 				result.put(i.toString(), new KrollDict(obj)); //add the item
 				
