@@ -42,12 +42,16 @@ function getVideos(page, perPage) {
 		});
 		row.add(info3);
 		
-		var img = Ti.UI.createImageView({
-			image: video.thumbnail,
-			width: video.thumbnail_width,
-			height: video.thumbnail_height,
-		});
-		row.add(img);
+		var thumbnail = AndroidMediaQuery.getVideoThumbnail(video.id);
+		if (thumbnail) {
+			var img = Ti.UI.createImageView({
+				image: typeof(thumbnail.image) == "string" ? "file://" + thumbnail.image : thumbnail.image,
+				width: thumbnail.width,
+				height: thumbnail.height,
+			});
+
+			row.add(img);
+		}
 		
 		rows.push(row);
 	}
@@ -72,7 +76,7 @@ function pagination(e) {
 			e.source._delay = false;
 		}, 500);
 		
-		var data = getPhotos(e.source.page, e.source.perPage);
+		var data = getVideos(e.source.page, e.source.perPage);
 		e.source.appendRow(data["rows"]);
 		e.source.page += 1;
 		e.source._pageEnd = data["end"];

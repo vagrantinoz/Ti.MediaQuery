@@ -84,17 +84,10 @@ public class MediaqueryModule extends KrollModule
 			MediaStore.Images.Media.DATE_TAKEN,
 			MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
 			MediaStore.Images.Media._ID,
+			MediaStore.Images.Media.DATA,
 		};
 		
-		String[] projection2 = {
-			MediaStore.Images.Thumbnails.DATA,
-			MediaStore.Images.Thumbnails.IMAGE_ID,
-			MediaStore.Images.Thumbnails.HEIGHT,
-			MediaStore.Images.Thumbnails.WIDTH,
-			MediaStore.Images.Thumbnails.KIND,
-		};
-		
-		String[] projection3 = new String[]{
+		String[] projection2 = new String[]{
 			MediaStore.Images.Media.BUCKET_ID,
 			MediaStore.Images.Media.SIZE,
 		};
@@ -122,11 +115,13 @@ public class MediaqueryModule extends KrollModule
 			String bucket;
 			Long date;
 			int count;
+			String path;
 			
 			int idColumn = cur.getColumnIndex(MediaStore.Images.Media._ID);
 			int bucketIdColumn = cur.getColumnIndex(MediaStore.Images.Media.BUCKET_ID);
 			int bucketColumn = cur.getColumnIndex(MediaStore.Images.Media.BUCKET_DISPLAY_NAME);
 			int dateColumn = cur.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN);
+			int dataColumn = cur.getColumnIndex(MediaStore.Images.Media.DATA);
 			
 			int order = 0;
 			do {
@@ -135,9 +130,10 @@ public class MediaqueryModule extends KrollModule
 				bucket_id = cur.getString(bucketIdColumn);
 				bucket = cur.getString(bucketColumn);
 				date = cur.getLong(dateColumn);
+				path = cur.getString(dataColumn);
 				
 				Cursor cursorForCountPhoto = activity.getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, 
-					projection3, 
+					projection2, 
 					MediaStore.Images.Media.BUCKET_ID + " IS NOT NULL AND " + MediaStore.Images.Media.BUCKET_ID + " == " + bucket_id + " AND " + MediaStore.Images.Media.SIZE + " > 0", 
 					null, 
 					"");
@@ -151,19 +147,19 @@ public class MediaqueryModule extends KrollModule
 				obj.put("id", bucket_id);
 				obj.put("name", bucket);
 				obj.put("dateTaken", date);
+				obj.put("thumbnail_id", id);
 				obj.put("photos_count", count);
 				
-				// query thumbnail
-				Object[] thumbnailInfo = getThumbnail(activity, id);
-				if (thumbnailInfo != null){
-					obj.put("thumbnail", thumbnailInfo[0]);
-					obj.put("thumbnail_width", thumbnailInfo[1]);
-					obj.put("thumbnail_height", thumbnailInfo[2]);
+				// exif
+				try {
+					ExifInterface exif = new ExifInterface(path);
+					// orientation
+					int orientation = Integer.parseInt(exif.getAttribute("Orientation"));
+					obj.put("orientation", orientation);
 				}
-				else {
-					obj.put("thumbnail", null);
-					obj.put("thumbnail_width", 0);
-					obj.put("thumbnail_height", 0);
+				catch (Exception e) {
+					Log.e(TAG, "Exif - ERROR");
+					Log.e(TAG, e.getMessage());
 				}
 				
 				result.put(String.valueOf(order), new KrollDict(obj)); //add the item
@@ -336,14 +332,6 @@ public class MediaqueryModule extends KrollModule
 				obj.put("lat", c.getFloat(c.getColumnIndex(MediaStore.Images.Media.LATITUDE)));
 				obj.put("lng", c.getFloat(c.getColumnIndex(MediaStore.Images.Media.LONGITUDE)));
 				
-				// query thumbnail
-				Object[] thumbnailInfo = getThumbnail(activity, _id);
-				if (thumbnailInfo != null){
-					obj.put("thumbnail", thumbnailInfo[0]);
-					obj.put("thumbnail_width", thumbnailInfo[1]);
-					obj.put("thumbnail_height", thumbnailInfo[2]);
-				}
-				
 				// exif
 				try {
 					ExifInterface exif = new ExifInterface(path);
@@ -366,8 +354,8 @@ public class MediaqueryModule extends KrollModule
 					obj.put("rotate", (orientation == 6 || orientation == 8) ? "1" : "0");
 				}
 				catch (Exception e) {
-					Log.d(TAG, "Exif - ERROR");
-					Log.d(TAG, e.getMessage());
+					Log.e(TAG, "Exif - ERROR");
+					Log.e(TAG, e.getMessage());
 				}
                 
 				result.put(i.toString(), new KrollDict(obj)); //add the item
@@ -382,8 +370,10 @@ public class MediaqueryModule extends KrollModule
 		return result;
 	}
 	
-	public Object[] getThumbnail(Activity activity, String id) {
-	
+	@Kroll.method
+	public KrollDict getThumbnail(String id) {
+		Activity activity = this.getActivity();
+		
 		String[] projection2 = {
 			MediaStore.Images.Thumbnails.DATA,
 			MediaStore.Images.Thumbnails.IMAGE_ID,
@@ -395,32 +385,34 @@ public class MediaqueryModule extends KrollModule
 		Cursor cursor = MediaStore.Images.Thumbnails.queryMiniThumbnail(
 			activity.getContentResolver(),
 			Long.parseLong(id),
-			1,
+			MediaStore.Images.Thumbnails.MINI_KIND,
 			projection2
 		);
 		cursor.moveToFirst();
-	
-		if (cursor.getCount() > 0) {
-			Object[] thumbnailInfo = {
-				cursor.getString(cursor.getColumnIndex(MediaStore.Images.Thumbnails.DATA)),
-				cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Thumbnails.WIDTH)),
-				cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Thumbnails.HEIGHT))
-			};
 		
-			return thumbnailInfo;
+		if (cursor.getCount() > 0) {
+			Log.d(TAG, "thumbnail( " + id + " ) already exist!!");
+			
+			HashMap<String, Object> thumbnailInfo = new HashMap<String, Object>();
+			thumbnailInfo.put("image", cursor.getString(cursor.getColumnIndex(MediaStore.Images.Thumbnails.DATA)));
+			thumbnailInfo.put("width", cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Thumbnails.WIDTH)));
+			thumbnailInfo.put("height", cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Thumbnails.HEIGHT)));
+			
+			return new KrollDict(thumbnailInfo);
 		}
 		else {
-			try {
-				Bitmap thumbnail = MediaStore.Images.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(id), 1, null);
-				thumbnail.recycle();
-				thumbnail = null;
-		
-				return getThumbnail(activity, id);
+			BitmapFactory.Options options = new BitmapFactory.Options();
+			options.inSampleSize = 16;
+			
+			Bitmap thumb = MediaStore.Images.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(id), MediaStore.Images.Thumbnails.MINI_KIND, options);
+			if (thumb != null) {
+				Log.d(TAG, "thumbnail( " + id + " ) do not exist. but request 'thumbnail create'!!");
+				return getThumbnail(id);
 			}
-			catch (Exception e) {
+			else {
+				Log.w(TAG, "thumbnail( " + id + " ) is null!!");
 				return null;
 			}
-			
 		}
 	}
 	
@@ -497,25 +489,6 @@ public class MediaqueryModule extends KrollModule
 				obj.put("duration", c.getFloat(c.getColumnIndex(MediaStore.Video.VideoColumns.DURATION)));
 				obj.put("resolution", c.getString(c.getColumnIndex(MediaStore.Video.VideoColumns.RESOLUTION)));
 				
-				try {
-					// create thumbnail
-					Bitmap thumb = MediaStore.Video.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(_id), MediaStore.Video.Thumbnails.MICRO_KIND, null);
-					TiBlob blob = TiBlob.blobFromImage(thumb);
-				
-					thumb.recycle();
-					thumb = null;
-				
-					obj.put("thumbnail", blob);
-					obj.put("thumbnail_width", 96);
-					obj.put("thumbnail_height", 96);
-				}
-				catch (Exception e) {
-					obj.put("thumbnail", null);
-					obj.put("thumbnail_width", 0);
-					obj.put("thumbnail_height", 0);
-				}
-				
-				
 				result.put(i.toString(), new KrollDict(obj)); //add the item
 				
 				c.moveToNext();
@@ -525,5 +498,26 @@ public class MediaqueryModule extends KrollModule
 		c.close();
 		
 		return result;
+	}
+	
+	@Kroll.method
+	public KrollDict getVideoThumbnail(String id) {
+		Activity activity = this.getActivity();
+		HashMap<String, Object> obj = new HashMap<String, Object>();
+		
+		// create thumbnail
+		Bitmap thumb = MediaStore.Video.Thumbnails.getThumbnail(activity.getContentResolver(), Long.parseLong(id), MediaStore.Video.Thumbnails.MICRO_KIND, null);
+		if (thumb != null) {
+			TiBlob blob = TiBlob.blobFromImage(thumb);
+		
+			obj.put("image", blob);
+			obj.put("width", 96);
+			obj.put("height", 96);
+		
+			return new KrollDict(obj);
+		}
+		else {
+			return null;
+		}
 	}
 }

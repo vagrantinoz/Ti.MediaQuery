@@ -2,7 +2,7 @@
 # this is your module manifest and used by Titanium
 # during compilation, packaging, distribution, etc.
 #
-version: 1.2.0
+version: 1.2.0.tripvi_20140318
 apiversion: 3
 description: query images and videos in the media library with exif tag parsing
 author: metacortex, vagrantinoz

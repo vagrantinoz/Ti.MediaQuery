@@ -38,26 +38,25 @@ function getPhotos(page, perPage) {
 		row.add(info2);
 
 		var info3 = Ti.UI.createLabel({
-			text: photo.gpsMethod + ' ' + photo.lat + ', ' + photo.lon,
+			text: photo.gpsMethod + ' ' + photo.lat + ', ' + (photo.lng || photo.lon),
 		});
 		row.add(info3);
 
 		var info4 = Ti.UI.createLabel({
-			text: photo.exif_lat + ', ' + photo.exif_lon,
+			text: photo.exif_lat + ', ' + (photo.exif_lon || photo.exif_lng),
 		});
 		row.add(info4);
 
-		var img = Ti.UI.createImageView({
-			image: "file://" + photo.thumbnail,
-			width: photo.thumbnail_width,
-			height: photo.thumbnail_height,
-		});
+		var thumbnail = AndroidMediaQuery.getThumbnail(photo.id);
+		if (thumbnail) {
+			var img = Ti.UI.createImageView({
+				image: typeof(thumbnail.image) == "string" ? "file://" + thumbnail.image : thumbnail.image,
+				width: thumbnail.width,
+				height: thumbnail.height,
+			});
 
-		if (photo.rotate == "1") {
-			img.transform = Ti.UI.create2DMatrix().rotate(90);
+			row.add(img);
 		}
-
-		row.add(img);
 
 		rows.push(row);
 	}

@@ -8,6 +8,25 @@ function openPhotosByAlbum(e) {
 	newWin.open();
 }
 
+function setThumbnail(wrapper, thumbnail_id) {
+	setTimeout(function() {
+		var thumbnail = require('com.tripvi.mediaquery').getThumbnail(thumbnail_id);
+		console.log("thumbnail_id :: " + thumbnail_id)
+		if (thumbnail) {
+			console.log("thumbnail exist!!");
+			var image = Ti.UI.createImageView({
+				width: "75dp",
+				height: (thumbnail.height * 75 / thumbnail.width) + "dp",
+				image: typeof(thumbnail.image) == "string" ? "file://" + thumbnail.image : thumbnail.image,
+			});
+			wrapper.add(image);
+		}
+		else {
+			console.log("thumbnail nothing!!");
+		}
+	}, 10);
+}
+
 function getPhotos(e) {
 	
 	var AndroidMediaQuery = require('com.tripvi.mediaquery');
@@ -29,6 +48,7 @@ function getPhotos(e) {
 		
 		var album = albums[i];
 		
+		console.log("orientation :: " + album["orientation"]);
 		console.log(new Date(album["dateTaken"]));
 		
 		var row = Ti.UI.createTableViewRow({
@@ -48,12 +68,7 @@ function getPhotos(e) {
 		})
 		wrapper.add(imageWrapper);
 		
-		var image = Ti.UI.createImageView({
-			width: "75dp",
-			height: (album.thumbnail_height * 75 / album.thumbnail_width) + "dp",
-			image: "file://" + album.thumbnail,
-		});
-		imageWrapper.add(image);
+		setThumbnail(imageWrapper, albums[i]["thumbnail_id"]);
 		
 		var title = Ti.UI.createLabel({
 			left: "85dp",
@@ -69,6 +84,12 @@ function getPhotos(e) {
 	table.setData(rows);
 }
 
+function onOpenWindow(e) {
+	setTimeout(function() {
+		getPhotos(e);
+	}, 100);
+}
+
 function onCloseWindow(e) {
 	
 	for(var child in e.source.getChildren()) {
@@ -79,8 +100,8 @@ function onCloseWindow(e) {
 		}
 	}
 	
-	e.source.addEventListener("open", getPhotos);
-	e.source.addEventListener("close", onCloseWindow);
+	e.source.removeEventListener("open", onOpenWindow);
+	e.source.removeEventListener("close", onCloseWindow);
 }
 
 exports.createWindow = function() {
@@ -90,7 +111,7 @@ exports.createWindow = function() {
 		backgroundColor: "#fff"
 	})
 	
-	win.addEventListener("open", getPhotos);
+	win.addEventListener("open", onOpenWindow);
 	win.addEventListener("close", onCloseWindow);
 	
 	return win;
